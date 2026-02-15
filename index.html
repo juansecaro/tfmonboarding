@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WiFi Onboarding BLE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; padding: 20px; text-align: center; }
+        input { width: 100%; padding: 10px; margin: 10px 0; }
+        button { background: #007bff; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; }
+        #status { margin-top: 20px; font-weight: bold; color: blue; }
+    </style>
+</head>
+<body>
+    <h2>Configuración WiFi</h2>
+    <button onclick="connectBLE()">1. Conectar al Dispositivo</button>
+    <hr>
+    <input type="text" id="ssid" placeholder="Nombre de la Red (SSID)">
+    <input type="password" id="pass" placeholder="Contraseña">
+    <button onclick="sendCredentials()">2. Enviar y Conectar</button>
+    <div id="status">Estado: Desconectado</div>
+
+    <script>
+        let device, server, service;
+        const UUID_SERV = "12345678-1234-5678-1234-567812345678";
+
+        async function connectBLE() {
+            try {
+                device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UUID_SERV] }] });
+                server = await device.gatt.connect();
+                service = await server.getPrimaryService(UUID_SERV);
+                document.getElementById('status').innerText = "Estado: Vinculado vía BLE";
+            } catch (e) { alert("Error: " + e); }
+        }
+
+        async function sendCredentials() {
+            const ssid = document.getElementById('ssid').value;
+            const pass = document.getElementById('pass').value;
+            
+            const charSSID = await service.getCharacteristic("12345678-1234-5678-1234-567812345679");
+            const charPASS = await service.getCharacteristic("12345678-1234-5678-1234-567812345680");
+            
+            await charSSID.writeValue(new TextEncoder().encode(ssid));
+            await charPASS.writeValue(new TextEncoder().encode(pass));
+            document.getElementById('status').innerText = "Estado: Enviado. Esperando confirmación...";
+            
+            // Aquí podrías añadir un intervalo para leer la característica de STATUS
+        }
+    </script>
+</body>
+</html>
