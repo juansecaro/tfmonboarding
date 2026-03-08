@@ -107,8 +107,11 @@
             const pass = document.getElementById('wifiPass').value;
             const connChar = await gattService.getCharacteristic(UUID_CONNECT);
             const payload = selectedSSID + "|" + pass;
-            await connChar.writeValue(new TextEncoder().encode(payload));
-            btnSend.disabled = true;
+            
+            // USAR ESTO PARA EVITAR EL PAIRING POPUP:
+            await connChar.writeValueWithoutResponse(new TextEncoder().encode(payload));
+            
+            statusMsg.textContent = "Comando enviado (Sin emparejamiento)...";
         };
 
         function handleStatus(event) {
