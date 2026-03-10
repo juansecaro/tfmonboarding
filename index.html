@@ -1,134 +1,116 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TFM WiFi Onboarding</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .status { padding: 10px; margin: 10px 0; border-radius: 4px; font-weight: bold; text-align: center; }
-        .idle { background: #eee; }
-        .working { background: #fff3cd; color: #856404; }
-        .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
-        .net-item { border-bottom: 1px solid #eee; padding: 10px; cursor: pointer; display: flex; justify-content: space-between; }
-        .net-item:hover { background: #f0f0f0; }
-        #network-list { margin-top: 20px; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; }
-        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:disabled { background: #ccc; }
-        .hidden { display: none; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLE Hola Mundo</title>
+  <style>
+    body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 20px; }
+    h1 { font-size: 1.4rem; }
+    button {
+      display: block; width: 100%; padding: 14px;
+      margin: 10px 0; font-size: 1rem;
+      border: none; border-radius: 8px;
+      background: #1a73e8; color: white; cursor: pointer;
+    }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    input {
+      width: 100%; padding: 10px; font-size: 1rem;
+      box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    #log {
+      margin-top: 20px; padding: 12px;
+      background: #f4f4f4; border-radius: 8px;
+      font-size: 0.85rem; white-space: pre-wrap;
+      min-height: 80px;
+    }
+    .ok  { color: #1a7a1a; }
+    .err { color: #c0392b; }
+    .rx  { color: #1a73e8; }
+  </style>
 </head>
 <body>
-    <div class="card">
-        <h2>Configuración de Red</h2>
-        <button id="btnConnect">1. Buscar Raspberry Pi</button>
-        
-        <div id="statusMsg" class="status idle">Desconectado</div>
+  <h1>🔵 BLE Hola Mundo</h1>
 
-        <div id="step2" class="hidden">
-            <h3>Seleccione una red WiFi:</h3>
-            <div id="network-list">Cargando redes...</div>
-        </div>
+  <button id="btnConectar">Conectar a HolaMundo-BLE</button>
 
-        <div id="step3" class="hidden">
-            <h4 id="selectedSSID"></h4>
-            <input type="password" id="wifiPass" placeholder="Introduce la contraseña">
-            <button id="btnSend">2. Conectar Raspberry al WiFi</button>
-        </div>
-    </div>
+  <input type="text" id="inputMsg" placeholder="Mensaje para la RPi..." disabled>
+  <button id="btnEnviar" disabled>Enviar a RPi →</button>
 
-    <script>
-        const UUID_SERVICE = "12345678-1234-5678-1234-567812345678";
-        const UUID_SCAN    = "12345678-1234-5678-1234-567812345682";
-        const UUID_CONNECT = "12345678-1234-5678-1234-567812345683";
-        const UUID_STATUS  = "12345678-1234-5678-1234-567812345681";
+  <div id="log">Esperando conexión...</div>
 
-        let bleDevice, bleServer, gattService;
-        let selectedSSID = "";
+  <script>
+    const SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
+    const RX_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef1';
+    const TX_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef2';
 
-        const btnConnect = document.getElementById('btnConnect');
-        const btnSend = document.getElementById('btnSend');
-        const statusMsg = document.getElementById('statusMsg');
+    let rxCharacteristic = null;
 
-        btnConnect.onclick = async () => {
-            try {
-                statusMsg.textContent = "Buscando...";
-                bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'RPi' }],
-                    optionalServices: [UUID_SERVICE]
-                });
+    const log = (msg, cls = '') => {
+      const div = document.getElementById('log');
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      div.appendChild(line);
+      div.scrollTop = div.scrollHeight;
+    };
 
-                bleServer = await bleDevice.gatt.connect();
-                gattService = await bleServer.getService(UUID_SERVICE);
-                
-                statusMsg.textContent = "Conectado. Obteniendo redes...";
-                statusMsg.className = "status success";
+    document.getElementById('btnConectar').addEventListener('click', async () => {
+      try {
+        log('Buscando dispositivo BLE...');
 
-                // Leer lista de redes
-                const scanChar = await gattService.getCharacteristic(UUID_SCAN);
-                const value = await scanChar.readValue();
-                const networks = JSON.parse(new TextDecoder().decode(value));
-                
-                displayNetworks(networks);
-                
-                // Suscribirse a STATUS
-                const statusChar = await gattService.getCharacteristic(UUID_STATUS);
-                await statusChar.startNotifications();
-                statusChar.addEventListener('characteristicvaluechanged', handleStatus);
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'HolaMundo-BLE' }],
+          optionalServices: [SERVICE_UUID]
+        });
 
-            } catch (err) {
-                statusMsg.textContent = "Error: " + err;
-                statusMsg.className = "status error";
-            }
-        };
+        log(`Dispositivo encontrado: ${device.name}`, 'ok');
 
-        function displayNetworks(networks) {
-            const list = document.getElementById('network-list');
-            list.innerHTML = "";
-            document.getElementById('step2').classList.remove('hidden');
-            
-            networks.forEach(net => {
-                const div = document.createElement('div');
-                div.className = "net-item";
-                div.innerHTML = `<span>${net.ssid} (${net.signal}%)</span> <small>${net.sec}</small>`;
-                div.onclick = () => {
-                    selectedSSID = net.ssid;
-                    document.getElementById('selectedSSID').textContent = "Red: " + selectedSSID;
-                    document.getElementById('step3').classList.remove('hidden');
-                };
-                list.appendChild(div);
-            });
-        }
+        const server = await device.gatt.connect();
+        log('Conectado al servidor GATT ✓', 'ok');
 
-        btnSend.onclick = async () => {
-            const pass = document.getElementById('wifiPass').value;
-            const connChar = await gattService.getCharacteristic(UUID_CONNECT);
-            const payload = selectedSSID + "|" + pass;
-            
-            // USAR ESTO PARA EVITAR EL PAIRING POPUP:
-            await connChar.writeValueWithoutResponse(new TextEncoder().encode(payload));
-            
-            statusMsg.textContent = "Comando enviado (Sin emparejamiento)...";
-        };
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        log('Servicio GATT obtenido ✓', 'ok');
 
-        function handleStatus(event) {
-            const val = event.target.value.getUint8(0);
-            if (val === 1) {
-                statusMsg.textContent = "Raspberry intentando conectar...";
-                statusMsg.className = "status working";
-            } else if (val === 2) {
-                statusMsg.textContent = "¡ÉXITO! Raspberry conectada.";
-                statusMsg.className = "status success";
-                btnSend.disabled = false;
-            } else if (val === 3) {
-                statusMsg.textContent = "ERROR: Contraseña incorrecta o fallo de red.";
-                statusMsg.className = "status error";
-                btnSend.disabled = false;
-            }
-        }
-    </script>
+        // Obtener característica RX (para escribir)
+        rxCharacteristic = await service.getCharacteristic(RX_CHAR_UUID);
+        log('Característica RX lista ✓', 'ok');
+
+        // Obtener característica TX y suscribirse a notificaciones
+        const txChar = await service.getCharacteristic(TX_CHAR_UUID);
+        await txChar.startNotifications();
+        txChar.addEventListener('characteristicvaluechanged', (event) => {
+          const valor = new TextDecoder().decode(event.target.value);
+          log(`← RPi dice: "${valor}"`, 'rx');
+        });
+        log('Suscrito a notificaciones TX ✓', 'ok');
+
+        // Habilitar controles
+        document.getElementById('inputMsg').disabled = false;
+        document.getElementById('btnEnviar').disabled = false;
+        document.getElementById('btnConectar').disabled = true;
+
+        log('¡Listo! Escribe un mensaje y envíalo.', 'ok');
+
+      } catch (err) {
+        log(`Error: ${err.message}`, 'err');
+      }
+    });
+
+    document.getElementById('btnEnviar').addEventListener('click', async () => {
+      const msg = document.getElementById('inputMsg').value.trim();
+      if (!msg || !rxCharacteristic) return;
+
+      try {
+        const encoded = new TextEncoder().encode(msg);
+        await rxCharacteristic.writeValueWithoutResponse(encoded);
+        log(`→ Enviado a RPi: "${msg}"`, 'ok');
+        document.getElementById('inputMsg').value = '';
+      } catch (err) {
+        log(`Error al enviar: ${err.message}`, 'err');
+      }
+    });
+  </script>
 </body>
 </html>
