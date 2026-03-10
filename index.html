@@ -103,6 +103,13 @@
       if (!msg || !rxCharacteristic) return;
 
       try {
+        // Reconectar si se perdió la conexión
+        if (!rxCharacteristic.service.device.gatt.connected) {
+          log('Reconectando...', 'ok');
+          await rxCharacteristic.service.device.gatt.connect();
+          log('Reconectado ✓', 'ok');
+        }
+
         const encoded = new TextEncoder().encode(msg);
         await rxCharacteristic.writeValueWithoutResponse(encoded);
         log(`→ Enviado a RPi: "${msg}"`, 'ok');
