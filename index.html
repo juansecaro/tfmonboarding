@@ -41,83 +41,75 @@
   <div id="log">Esperando conexión...</div>
 
   <script>
-    const SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
-    const RX_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef1';
-    const TX_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef2';
+    // Variables globales
+let gattDevice = null;
+let rxCharacteristic = null;
 
-    let rxCharacteristic = null;
+async function obtenerCaracteristicas(server) {
+  const service = await server.getPrimaryService(SERVICE_UUID);
+  log('Servicio GATT obtenido ✓', 'ok');
 
-    const log = (msg, cls = '') => {
-      const div = document.getElementById('log');
-      const line = document.createElement('div');
-      if (cls) line.className = cls;
-      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-      div.appendChild(line);
-      div.scrollTop = div.scrollHeight;
-    };
+  rxCharacteristic = await service.getCharacteristic(RX_CHAR_UUID);
+  log('Característica RX lista ✓', 'ok');
 
-    document.getElementById('btnConectar').addEventListener('click', async () => {
-      try {
-        log('Buscando dispositivo BLE...');
+  const txChar = await service.getCharacteristic(TX_CHAR_UUID);
+  await txChar.startNotifications();
+  txChar.addEventListener('characteristicvaluechanged', (event) => {
+    const valor = new TextDecoder().decode(event.target.value);
+    log(`← RPi dice: "${valor}"`, 'rx');
+  });
+  log('Suscrito a notificaciones TX ✓', 'ok');
+}
 
-        const device = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'HolaMundo-BLE' }],
-          optionalServices: [SERVICE_UUID]
-        });
+document.getElementById('btnConectar').addEventListener('click', async () => {
+  try {
+    log('Buscando dispositivo BLE...');
 
-        log(`Dispositivo encontrado: ${device.name}`, 'ok');
-
-        const server = await device.gatt.connect();
-        log('Conectado al servidor GATT ✓', 'ok');
-
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        log('Servicio GATT obtenido ✓', 'ok');
-
-        // Obtener característica RX (para escribir)
-        rxCharacteristic = await service.getCharacteristic(RX_CHAR_UUID);
-        log('Característica RX lista ✓', 'ok');
-
-        // Obtener característica TX y suscribirse a notificaciones
-        const txChar = await service.getCharacteristic(TX_CHAR_UUID);
-        await txChar.startNotifications();
-        txChar.addEventListener('characteristicvaluechanged', (event) => {
-          const valor = new TextDecoder().decode(event.target.value);
-          log(`← RPi dice: "${valor}"`, 'rx');
-        });
-        log('Suscrito a notificaciones TX ✓', 'ok');
-
-        // Habilitar controles
-        document.getElementById('inputMsg').disabled = false;
-        document.getElementById('btnEnviar').disabled = false;
-        document.getElementById('btnConectar').disabled = true;
-
-        log('¡Listo! Escribe un mensaje y envíalo.', 'ok');
-
-      } catch (err) {
-        log(`Error: ${err.message}`, 'err');
-      }
+    gattDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'HolaMundo-BLE' }],
+      optionalServices: [SERVICE_UUID]
     });
 
-    document.getElementById('btnEnviar').addEventListener('click', async () => {
-      const msg = document.getElementById('inputMsg').value.trim();
-      if (!msg || !rxCharacteristic) return;
+    log(`Dispositivo encontrado: ${gattDevice.name}`, 'ok');
 
-      try {
-        // Reconectar si se perdió la conexión
-        if (!rxCharacteristic.service.device.gatt.connected) {
-          log('Reconectando...', 'ok');
-          await rxCharacteristic.service.device.gatt.connect();
-          log('Reconectado ✓', 'ok');
-        }
+    const server = await gattDevice.gatt.connect();
+    log('Conectado al servidor GATT ✓', 'ok');
 
-        const encoded = new TextEncoder().encode(msg);
-        await rxCharacteristic.writeValueWithoutResponse(encoded);
-        log(`→ Enviado a RPi: "${msg}"`, 'ok');
-        document.getElementById('inputMsg').value = '';
-      } catch (err) {
-        log(`Error al enviar: ${err.message}`, 'err');
-      }
-    });
+    await obtenerCaracteristicas(server);
+
+    document.getElementById('inputMsg').disabled = false;
+    document.getElementById('btnEnviar').disabled = false;
+    document.getElementById('btnConectar').disabled = true;
+
+    log('¡Listo! Escribe un mensaje y envíalo.', 'ok');
+
+  } catch (err) {
+    log(`Error: ${err.message}`, 'err');
+  }
+});
+
+document.getElementById('btnEnviar').addEventListener('click', async () => {
+  const msg = document.getElementById('inputMsg').value.trim();
+  if (!msg || !gattDevice) return;
+
+  try {
+    // Si se desconectó, reconectar Y re-obtener características
+    if (!gattDevice.gatt.connected) {
+      log('Reconectando...', 'ok');
+      const server = await gattDevice.gatt.connect();
+      await obtenerCaracteristicas(server);
+      log('Reconectado ✓', 'ok');
+    }
+
+    const encoded = new TextEncoder().encode(msg);
+    await rxCharacteristic.writeValueWithoutResponse(encoded);
+    log(`→ Enviado a RPi: "${msg}"`, 'ok');
+    document.getElementById('inputMsg').value = '';
+
+  } catch (err) {
+    log(`Error al enviar: ${err.message}`, 'err');
+  }
+});
   </script>
 </body>
 </html>
