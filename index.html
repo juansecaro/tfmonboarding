@@ -45,7 +45,6 @@
     let gattDevice = null;
     let rxCharacteristic = null;
 
-    // ── Utilidad de log ──────────────────────────────────────────
     const log = (msg, cls = '') => {
       const div = document.getElementById('log');
       const line = document.createElement('div');
@@ -55,7 +54,6 @@
       div.scrollTop = div.scrollHeight;
     };
 
-    // ── Obtener servicio y características (también tras reconexión) ──
     async function obtenerCaracteristicas(server) {
       const service = await server.getPrimaryService(SERVICE_UUID);
       log('Servicio GATT obtenido ✓', 'ok');
@@ -72,7 +70,19 @@
       log('Suscrito a notificaciones TX ✓', 'ok');
     }
 
-    // ── Botón Conectar ───────────────────────────────────────────
+    function configurarReconexionAutomatica() {
+      gattDevice.addEventListener('gattserverdisconnected', async () => {
+        log('Conexión perdida, reconectando...', 'ok');
+        try {
+          const server = await gattDevice.gatt.connect();
+          await obtenerCaracteristicas(server);
+          log('Reconectado automáticamente ✓', 'ok');
+        } catch (err) {
+          log(`Error reconectando: ${err.message}`, 'err');
+        }
+      });
+    }
+
     document.getElementById('btnConectar').addEventListener('click', async () => {
       try {
         log('Buscando dispositivo BLE...');
@@ -86,6 +96,7 @@
         log('Conectado al servidor GATT ✓', 'ok');
 
         await obtenerCaracteristicas(server);
+        configurarReconexionAutomatica();
 
         document.getElementById('inputMsg').disabled = false;
         document.getElementById('btnEnviar').disabled = false;
@@ -97,7 +108,6 @@
       }
     });
 
-    // ── Botón Enviar ─────────────────────────────────────────────
     document.getElementById('btnEnviar').addEventListener('click', async () => {
       const msg = document.getElementById('inputMsg').value.trim();
       if (!msg || !gattDevice) return;
