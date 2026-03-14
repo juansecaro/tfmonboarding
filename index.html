@@ -3,132 +3,228 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BLE Hola Mundo</title>
+  <title>WiFi Onboarding</title>
   <style>
-    body { font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 20px; }
-    h1 { font-size: 1.4rem; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 20px; background: #f0f4f8; min-height: 100vh; }
+    h1 { font-size: 1.3rem; margin-bottom: 4px; color: #1a1a2e; }
+    .subtitle { font-size: 0.85rem; color: #666; margin-bottom: 20px; }
+
+    .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
     button {
-      display: block; width: 100%; padding: 14px;
-      margin: 10px 0; font-size: 1rem;
+      display: block; width: 100%; padding: 13px;
+      margin: 8px 0; font-size: 1rem; font-weight: 500;
       border: none; border-radius: 8px;
       background: #1a73e8; color: white; cursor: pointer;
+      transition: background 0.2s;
     }
-    button:disabled { background: #aaa; cursor: not-allowed; }
-    input {
-      width: 100%; padding: 10px; font-size: 1rem;
-      box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px;
-      margin-bottom: 8px;
+    button:hover { background: #1557b0; }
+    button:disabled { background: #b0bec5; cursor: not-allowed; }
+    button.secondary { background: #f1f3f4; color: #333; }
+    button.secondary:hover { background: #e2e5e9; }
+    button.danger { background: #e53935; }
+
+    input, select {
+      width: 100%; padding: 11px 12px; font-size: 1rem;
+      border: 1.5px solid #ddd; border-radius: 8px;
+      margin-bottom: 10px; outline: none;
+      transition: border-color 0.2s;
     }
+    input:focus, select:focus { border-color: #1a73e8; }
+
+    label { font-size: 0.85rem; color: #555; display: block; margin-bottom: 4px; }
+
+    .red-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; border-radius: 8px; cursor: pointer;
+      border: 1.5px solid #eee; margin-bottom: 8px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .red-item:hover { border-color: #1a73e8; background: #f0f7ff; }
+    .red-item.selected { border-color: #1a73e8; background: #e8f0fe; }
+    .red-nombre { font-weight: 500; font-size: 0.95rem; }
+    .red-meta { font-size: 0.75rem; color: #888; margin-top: 2px; }
+    .red-signal { font-size: 1.4rem; }
+
+    .status-badge {
+      display: inline-block; padding: 4px 10px;
+      border-radius: 20px; font-size: 0.8rem; font-weight: 500;
+      margin-bottom: 12px;
+    }
+    .status-conectado { background: #e8f5e9; color: #2e7d32; }
+    .status-desconectado { background: #fce4ec; color: #c62828; }
+    .status-buscando { background: #fff8e1; color: #f57f17; }
+
     #log {
-      margin-top: 20px; padding: 12px;
-      background: #f4f4f4; border-radius: 8px;
-      font-size: 0.85rem; white-space: pre-wrap;
-      min-height: 80px;
+      font-size: 0.78rem; color: #555;
+      max-height: 140px; overflow-y: auto;
+      line-height: 1.6;
     }
-    .ok  { color: #1a7a1a; }
-    .err { color: #c0392b; }
-    .rx  { color: #1a73e8; }
+    .log-ok  { color: #2e7d32; }
+    .log-err { color: #c62828; }
+    .log-rx  { color: #1557b0; font-weight: 500; }
+    .log-info { color: #888; }
+
+    .seccion { display: none; }
+    .seccion.activa { display: block; }
+
+    .wifi-icon { font-size: 2rem; text-align: center; margin-bottom: 8px; }
   </style>
 </head>
 <body>
-  <h1>🔵 BLE Hola Mundo</h1>
-  <button id="btnConectar">Conectar a HolaMundo-BLE</button>
-  <input type="text" id="inputMsg" placeholder="Mensaje para la RPi..." disabled>
-  <button id="btnEnviar" disabled>Enviar a RPi →</button>
-  <div id="log">Esperando conexión...</div>
+
+  <h1>📶 WiFi Onboarding</h1>
+  <p class="subtitle">Configura la conexión WiFi de tu dispositivo</p>
+
+  <!-- SECCIÓN 1: Conectar BLE -->
+  <div class="card seccion activa" id="secBLE">
+    <div class="wifi-icon">🔵</div>
+    <p style="text-align:center; margin-bottom:12px; color:#555; font-size:0.9rem;">
+      Acércate al dispositivo y pulsa conectar
+    </p>
+    <button id="btnConectar">Conectar al dispositivo</button>
+  </div>
+
+  <!-- SECCIÓN 2: Escanear redes -->
+  <div class="card seccion" id="secRedes">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <strong>Redes disponibles</strong>
+      <button id="btnScan" class="secondary" style="width:auto; padding:6px 14px; font-size:0.85rem; margin:0;">
+        🔄 Actualizar
+      </button>
+    </div>
+    <div id="listaRedes">
+      <p style="color:#888; font-size:0.9rem;">Pulsa "Actualizar" para buscar redes...</p>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 3: Introducir contraseña -->
+  <div class="card seccion" id="secPassword">
+    <strong id="labelRedSeleccionada">Red seleccionada</strong>
+    <p style="color:#888; font-size:0.82rem; margin: 6px 0 14px;">Introduce la contraseña de la red</p>
+    <label>Contraseña</label>
+    <input type="password" id="inputPassword" placeholder="Contraseña WiFi...">
+    <div style="display:flex; gap:8px;">
+      <button id="btnVolver" class="secondary" style="flex:1">← Volver</button>
+      <button id="btnConectar2" style="flex:2">Conectar →</button>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 4: Resultado -->
+  <div class="card seccion" id="secResultado">
+    <div class="wifi-icon" id="iconoResultado">⏳</div>
+    <p id="textoResultado" style="text-align:center; margin-bottom:16px; font-size:0.95rem;">Conectando...</p>
+    <button id="btnOtraRed" class="secondary">Elegir otra red</button>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <strong style="font-size:0.85rem;">Registro</strong>
+      <span id="estadoBLE" class="status-badge status-desconectado">Sin conexión BLE</span>
+    </div>
+    <div id="log">Esperando...</div>
+  </div>
 
   <script>
     const SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
     const RX_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef1';
     const TX_CHAR_UUID = '12345678-1234-5678-1234-56789abcdef2';
+    const DEVICE_NAME  = 'TFM-Onboarding';
 
     let gattDevice = null;
     let rxCharacteristic = null;
+    let redSeleccionada = null;
+    let esperandoRespuesta = null;  // resolve de promesa pendiente
 
-    const log = (msg, cls = '') => {
+    // ── Utilidades UI ────────────────────────────────────────────
+    const log = (msg, cls = 'log-info') => {
       const div = document.getElementById('log');
       const line = document.createElement('div');
-      if (cls) line.className = cls;
+      line.className = cls;
       line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
       div.appendChild(line);
       div.scrollTop = div.scrollHeight;
     };
 
+    const mostrarSeccion = (id) => {
+      document.querySelectorAll('.seccion').forEach(s => s.classList.remove('activa'));
+      document.getElementById(id).classList.add('activa');
+    };
+
+    const setEstadoBLE = (texto, cls) => {
+      const badge = document.getElementById('estadoBLE');
+      badge.textContent = texto;
+      badge.className = `status-badge ${cls}`;
+    };
+
+    const signalIcon = (signal) => {
+      if (signal >= 75) return '▂▄▆█';
+      if (signal >= 50) return '▂▄▆_';
+      if (signal >= 25) return '▂▄__';
+      return '▂___';
+    };
+
+    // ── BLE ──────────────────────────────────────────────────────
     async function obtenerCaracteristicas(server) {
       const service = await server.getPrimaryService(SERVICE_UUID);
-      log('Servicio GATT obtenido ✓', 'ok');
-
       rxCharacteristic = await service.getCharacteristic(RX_CHAR_UUID);
-      log('Característica RX lista ✓', 'ok');
-
       const txChar = await service.getCharacteristic(TX_CHAR_UUID);
       await txChar.startNotifications();
-      txChar.addEventListener('characteristicvaluechanged', (event) => {
-        const valor = new TextDecoder().decode(event.target.value);
-        log(`← RPi dice: "${valor}"`, 'rx');
-      });
-      log('Suscrito a notificaciones TX ✓', 'ok');
+      txChar.addEventListener('characteristicvaluechanged', onNotificacion);
+      log('BLE conectado ✓', 'log-ok');
     }
 
-    function configurarReconexionAutomatica() {
+    function onNotificacion(event) {
+      const valor = new TextDecoder().decode(event.target.value);
+      log(`← ${valor}`, 'log-rx');
+      if (esperandoRespuesta) {
+        esperandoRespuesta(valor);
+        esperandoRespuesta = null;
+      }
+    }
+
+    function enviarComando(cmd) {
+      return new Promise(async (resolve, reject) => {
+        try {
+          esperandoRespuesta = resolve;
+          const encoded = new TextEncoder().encode(cmd);
+          await rxCharacteristic.writeValueWithoutResponse(encoded);
+          log(`→ ${cmd}`, 'log-info');
+          // Timeout de 30 segundos
+          setTimeout(() => {
+            if (esperandoRespuesta) {
+              esperandoRespuesta = null;
+              reject(new Error('Timeout esperando respuesta'));
+            }
+          }, 30000);
+        } catch (err) {
+          esperandoRespuesta = null;
+          reject(err);
+        }
+      });
+    }
+
+    function configurarReconexion() {
       gattDevice.addEventListener('gattserverdisconnected', async () => {
-        log('Conexión perdida, reconectando...', 'ok');
+        setEstadoBLE('Reconectando...', 'status-buscando');
+        log('Conexión perdida, reconectando...', 'log-info');
         try {
           const server = await gattDevice.gatt.connect();
           await obtenerCaracteristicas(server);
-          log('Reconectado automáticamente ✓', 'ok');
+          setEstadoBLE('BLE conectado', 'status-conectado');
         } catch (err) {
-          log(`Error reconectando: ${err.message}`, 'err');
+          setEstadoBLE('Sin conexión BLE', 'status-desconectado');
+          log(`Error reconectando: ${err.message}`, 'log-err');
         }
       });
     }
 
+    // ── Botón Conectar BLE ───────────────────────────────────────
     document.getElementById('btnConectar').addEventListener('click', async () => {
       try {
         log('Buscando dispositivo BLE...');
-        gattDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'HolaMundo-BLE' }],
-          optionalServices: [SERVICE_UUID]
-        });
-        log(`Dispositivo encontrado: ${gattDevice.name}`, 'ok');
+        setEstadoBLE('Buscando...', 'status-buscando');
 
-        const server = await gattDevice.gatt.connect();
-        log('Conectado al servidor GATT ✓', 'ok');
-
-        await obtenerCaracteristicas(server);
-        configurarReconexionAutomatica();
-
-        document.getElementById('inputMsg').disabled = false;
-        document.getElementById('btnEnviar').disabled = false;
-        document.getElementById('btnConectar').disabled = true;
-        log('¡Listo! Escribe un mensaje y envíalo.', 'ok');
-
-      } catch (err) {
-        log(`Error: ${err.message}`, 'err');
-      }
-    });
-
-    document.getElementById('btnEnviar').addEventListener('click', async () => {
-      const msg = document.getElementById('inputMsg').value.trim();
-      if (!msg || !gattDevice) return;
-
-      try {
-        if (!gattDevice.gatt.connected) {
-          log('Reconectando...', 'ok');
-          const server = await gattDevice.gatt.connect();
-          await obtenerCaracteristicas(server);
-          log('Reconectado ✓', 'ok');
-        }
-
-        const encoded = new TextEncoder().encode(msg);
-        await rxCharacteristic.writeValueWithoutResponse(encoded);
-        log(`→ Enviado a RPi: "${msg}"`, 'ok');
-        document.getElementById('inputMsg').value = '';
-
-      } catch (err) {
-        log(`Error al enviar: ${err.message}`, 'err');
-      }
-    });
-  </script>
-</body>
-</html>
+        gattDevice = await navigator.bluetooth.requestDe
