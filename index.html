@@ -9,9 +9,7 @@
     body { font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 20px; background: #f0f4f8; min-height: 100vh; }
     h1 { font-size: 1.3rem; margin-bottom: 4px; color: #1a1a2e; }
     .subtitle { font-size: 0.85rem; color: #666; margin-bottom: 20px; }
-
     .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-
     button {
       display: block; width: 100%; padding: 13px;
       margin: 8px 0; font-size: 1rem; font-weight: 500;
@@ -23,18 +21,14 @@
     button:disabled { background: #b0bec5; cursor: not-allowed; }
     button.secondary { background: #f1f3f4; color: #333; }
     button.secondary:hover { background: #e2e5e9; }
-    button.danger { background: #e53935; }
-
-    input, select {
+    input {
       width: 100%; padding: 11px 12px; font-size: 1rem;
       border: 1.5px solid #ddd; border-radius: 8px;
       margin-bottom: 10px; outline: none;
       transition: border-color 0.2s;
     }
-    input:focus, select:focus { border-color: #1a73e8; }
-
+    input:focus { border-color: #1a73e8; }
     label { font-size: 0.85rem; color: #555; display: block; margin-bottom: 4px; }
-
     .red-item {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 12px; border-radius: 8px; cursor: pointer;
@@ -45,30 +39,25 @@
     .red-item.selected { border-color: #1a73e8; background: #e8f0fe; }
     .red-nombre { font-weight: 500; font-size: 0.95rem; }
     .red-meta { font-size: 0.75rem; color: #888; margin-top: 2px; }
-    .red-signal { font-size: 1.4rem; }
-
+    .red-signal { font-size: 1.1rem; letter-spacing: -1px; color: #1a73e8; }
     .status-badge {
       display: inline-block; padding: 4px 10px;
       border-radius: 20px; font-size: 0.8rem; font-weight: 500;
-      margin-bottom: 12px;
     }
     .status-conectado { background: #e8f5e9; color: #2e7d32; }
     .status-desconectado { background: #fce4ec; color: #c62828; }
     .status-buscando { background: #fff8e1; color: #f57f17; }
-
     #log {
       font-size: 0.78rem; color: #555;
       max-height: 140px; overflow-y: auto;
       line-height: 1.6;
     }
-    .log-ok  { color: #2e7d32; }
-    .log-err { color: #c62828; }
-    .log-rx  { color: #1557b0; font-weight: 500; }
+    .log-ok   { color: #2e7d32; }
+    .log-err  { color: #c62828; }
+    .log-rx   { color: #1557b0; font-weight: 500; }
     .log-info { color: #888; }
-
     .seccion { display: none; }
     .seccion.activa { display: block; }
-
     .wifi-icon { font-size: 2rem; text-align: center; margin-bottom: 8px; }
   </style>
 </head>
@@ -99,7 +88,7 @@
     </div>
   </div>
 
-  <!-- SECCIÓN 3: Introducir contraseña -->
+  <!-- SECCIÓN 3: Contraseña -->
   <div class="card seccion" id="secPassword">
     <strong id="labelRedSeleccionada">Red seleccionada</strong>
     <p style="color:#888; font-size:0.82rem; margin: 6px 0 14px;">Introduce la contraseña de la red</p>
@@ -136,7 +125,7 @@
     let gattDevice = null;
     let rxCharacteristic = null;
     let redSeleccionada = null;
-    let esperandoRespuesta = null;  // resolve de promesa pendiente
+    let esperandoRespuesta = null;
 
     // ── Utilidades UI ────────────────────────────────────────────
     const log = (msg, cls = 'log-info') => {
@@ -192,7 +181,6 @@
           const encoded = new TextEncoder().encode(cmd);
           await rxCharacteristic.writeValueWithoutResponse(encoded);
           log(`→ ${cmd}`, 'log-info');
-          // Timeout de 30 segundos
           setTimeout(() => {
             if (esperandoRespuesta) {
               esperandoRespuesta = null;
@@ -223,8 +211,123 @@
 
     // ── Botón Conectar BLE ───────────────────────────────────────
     document.getElementById('btnConectar').addEventListener('click', async () => {
+      log('Iniciando conexión BLE...', 'log-info');
       try {
-        log('Buscando dispositivo BLE...');
+        if (!navigator.bluetooth) {
+          log('Web Bluetooth no disponible', 'log-err');
+          return;
+        }
         setEstadoBLE('Buscando...', 'status-buscando');
+        gattDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: DEVICE_NAME }],
+          optionalServices: [SERVICE_UUID]
+        });
+        log(`Dispositivo encontrado: ${gattDevice.name}`, 'log-ok');
+        const server = await gattDevice.gatt.connect();
+        await obtenerCaracteristicas(server);
+        configurarReconexion();
+        setEstadoBLE('BLE conectado', 'status-conectado');
+        mostrarSeccion('secRedes');
+      } catch (err) {
+        setEstadoBLE('Sin conexión BLE', 'status-desconectado');
+        log(`Error: ${err.message}`, 'log-err');
+      }
+    });
 
-        gattDevice = await navigator.bluetooth.requestDe
+    // ── Botón Escanear redes ─────────────────────────────────────
+    document.getElementById('btnScan').addEventListener('click', async () => {
+      const lista = document.getElementById('listaRedes');
+      lista.innerHTML = '<p style="color:#888; font-size:0.9rem;">Escaneando...</p>';
+      log('Escaneando redes WiFi...', 'log-info');
+      try {
+        const respuesta = await enviarComando('SCAN');
+        if (!respuesta.startsWith('NETS:') || respuesta === 'NETS:') {
+          lista.innerHTML = '<p style="color:#888;">No se encontraron redes</p>';
+          return;
+        }
+        const redes = respuesta.slice(5).split('|').map(r => {
+          const partes = r.split(',');
+          return { ssid: partes[0], signal: parseInt(partes[1]), security: partes[2] };
+        });
+        lista.innerHTML = '';
+        redes.forEach(red => {
+          const item = document.createElement('div');
+          item.className = 'red-item';
+          item.innerHTML = `
+            <div>
+              <div class="red-nombre">${red.ssid}</div>
+              <div class="red-meta">${red.security} · ${red.signal}%</div>
+            </div>
+            <div class="red-signal">${signalIcon(red.signal)}</div>
+          `;
+          item.addEventListener('click', () => seleccionarRed(red, item));
+          lista.appendChild(item);
+        });
+        log(`${redes.length} redes encontradas`, 'log-ok');
+      } catch (err) {
+        lista.innerHTML = '<p style="color:#c62828;">Error al escanear</p>';
+        log(`Error escaneo: ${err.message}`, 'log-err');
+      }
+    });
+
+    // ── Seleccionar red ──────────────────────────────────────────
+    function seleccionarRed(red, elemento) {
+      document.querySelectorAll('.red-item').forEach(i => i.classList.remove('selected'));
+      elemento.classList.add('selected');
+      redSeleccionada = red;
+      document.getElementById('labelRedSeleccionada').textContent = `🔒 ${red.ssid}`;
+      document.getElementById('inputPassword').value = '';
+      mostrarSeccion('secPassword');
+    }
+
+    // ── Botón Volver ─────────────────────────────────────────────
+    document.getElementById('btnVolver').addEventListener('click', () => {
+      mostrarSeccion('secRedes');
+    });
+
+    // ── Botón Conectar WiFi ──────────────────────────────────────
+    document.getElementById('btnConectar2').addEventListener('click', async () => {
+      const password = document.getElementById('inputPassword').value;
+      if (!password) {
+        log('Introduce una contraseña', 'log-err');
+        return;
+      }
+      mostrarSeccion('secResultado');
+      document.getElementById('iconoResultado').textContent = '⏳';
+      document.getElementById('textoResultado').textContent =
+        `Conectando a "${redSeleccionada.ssid}"...`;
+      try {
+        const respuesta = await enviarComando(`CONNECT:${redSeleccionada.ssid}|${password}`);
+        if (respuesta.startsWith('WIFI_OK:')) {
+          document.getElementById('iconoResultado').textContent = '✅';
+          document.getElementById('textoResultado').textContent =
+            `Conectado a "${redSeleccionada.ssid}" correctamente`;
+          log(`WiFi conectado: ${respuesta}`, 'log-ok');
+        } else {
+          const motivo = respuesta.split(':')[1] || 'desconocido';
+          const mensajes = {
+            'red_no_encontrada':    'Red no encontrada',
+            'contraseña_incorrecta':'Contraseña incorrecta',
+            'timeout':              'Tiempo de espera agotado',
+            'formato_invalido':     'Error interno',
+          };
+          document.getElementById('iconoResultado').textContent = '❌';
+          document.getElementById('textoResultado').textContent =
+            mensajes[motivo] || `Error: ${motivo}`;
+          log(`Error WiFi: ${respuesta}`, 'log-err');
+        }
+      } catch (err) {
+        document.getElementById('iconoResultado').textContent = '❌';
+        document.getElementById('textoResultado').textContent = 'Error de comunicación';
+        log(`Error: ${err.message}`, 'log-err');
+      }
+    });
+
+    // ── Botón Elegir otra red ────────────────────────────────────
+    document.getElementById('btnOtraRed').addEventListener('click', () => {
+      mostrarSeccion('secRedes');
+    });
+
+  </script>
+</body>
+</html>
